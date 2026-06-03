@@ -1,11 +1,9 @@
 """
-MCP Server 测试脚本
-StdioTransport 模式 — 覆盖连接管理 CRUD + 持久化 + 边界情况
+MCP Server 测试脚本 (适配新版 add_connection API：host/port/user_id/password)
 """
 import json
 import subprocess
 import os
-import time
 
 server_path = r"H:\Memento.MCP\Memento.MCP\Memento.MCP\bin\Debug\net10.0\Memento.MCP.exe"
 persist_path = r"H:\Memento.MCP\Memento.MCP\Memento.MCP\bin\Debug\net10.0\connections.json"
@@ -101,22 +99,20 @@ proc = start_server()
 handshake(proc)
 
 resp = tools_call(proc, "add_connection", {
-    "name": "test_dev_mysql",
-    "connection_string": "Server=localhost;Database=testdb;Uid=root;Pwd=123456;",
-    "db_type": "MySql",
+    "name": "test_dev_mysql", "host": "localhost", "port": 3306,
+    "user_id": "root", "password": "123456", "db_type": "mysql",
 })
 check("添加 MySQL 连接", resp, expect_ok=True)
 
 resp = tools_call(proc, "add_connection", {
-    "name": "test_dev_sqlserver",
-    "connection_string": "Server=.;Database=testdb;Trusted_Connection=True;",
-    "db_type": "SqlServer",
+    "name": "test_dev_sqlserver", "host": ".", "port": 1433,
+    "user_id": "sa", "password": "", "db_type": "sqlserver",
 })
 check("添加 SQL Server 连接", resp, expect_ok=True)
 
 resp = tools_call(proc, "add_connection", {
-    "name": "test_dev_mysql",
-    "connection_string": "Server=other;Database=test;Uid=root;Pwd=123;",
+    "name": "test_dev_mysql", "host": "other", "port": 3306,
+    "user_id": "root", "password": "123",
 })
 check("重复添加应拒绝", resp, expect_ok=False)
 
@@ -135,9 +131,7 @@ check("重复删除应报错", resp, expect_ok=False)
 resp = tools_call(proc, "list_connections", {})
 check("列表只剩 test_dev_mysql", resp)
 
-# 清理本节的测试数据
 resp = tools_call(proc, "delete_connection", {"name": "test_dev_mysql"})
-
 proc.terminate()
 proc.wait()
 
@@ -147,52 +141,35 @@ proc = start_server()
 handshake(proc)
 
 resp = tools_call(proc, "add_connection", {
-    "name": "test_special_chars",
-    "connection_string": "Server=my-host.com;Port=3306;Database=test_db;Uid=user@company;Pwd=pass!@#$%^&*();",
-    "db_type": "MySql",
+    "name": "test_special_chars", "host": "my-host.com", "port": 3306,
+    "user_id": "user@company", "password": "pass!@#$%^&*()", "db_type": "mysql",
 })
-check("连接串含特殊字符", resp, expect_ok=True)
+check("特殊字符密码", resp, expect_ok=True)
 
-resp = tools_call(proc, "update_connection", {
-    "name": "test_special_chars",
-    "db_type": "PostgreSQL",
-})
+resp = tools_call(proc, "update_connection", {"name": "test_special_chars", "db_type": "postgresql"})
 check("仅更新 db_type", resp, expect_ok=True)
 
-resp = tools_call(proc, "update_connection", {
-    "name": "test_special_chars",
-    "connection_string": "Host=localhost;Port=5432;Database=testdb;",
-})
-check("仅更新 connection_string", resp, expect_ok=True)
+resp = tools_call(proc, "update_connection", {"name": "test_special_chars", "host": "new-host.com", "port": 5432})
+check("仅更新 host/port", resp, expect_ok=True)
 
-resp = tools_call(proc, "add_connection", {
-    "name": "test_empty_cs",
-    "connection_string": "",
-    "db_type": "MySql",
-})
-check("空连接串允许添加", resp, expect_ok=True)
-
-resp = tools_call(proc, "update_connection", {"name": "test_does_not_exist", "connection_string": "abc"})
+resp = tools_call(proc, "update_connection", {"name": "test_does_not_exist"})
 check("更新不存在的连接", resp, expect_ok=False)
 
 resp = tools_call(proc, "delete_connection", {"name": "test_does_not_exist"})
 check("删除不存在的连接", resp, expect_ok=False)
 
-# 清理本节测试数据
-for name in ["test_special_chars", "test_empty_cs"]:
+for name in ["test_special_chars"]:
     resp = tools_call(proc, "delete_connection", {"name": name})
 proc.terminate()
 proc.wait()
 
 # ===== 3. 持久化测试 =====
 section("3. 持久化测试")
-
 proc = start_server()
 handshake(proc)
 resp = tools_call(proc, "add_connection", {
-    "name": "persist_test",
-    "connection_string": "Server=10.0.0.1;Database=mydb;Uid=sa;Pwd=secret;",
-    "db_type": "SqlServer",
+    "name": "persist_test", "host": "10.0.0.1", "port": 1433,
+    "user_id": "sa", "password": "secret", "db_type": "sqlserver",
 })
 check("添加持久化数据", resp, expect_ok=True)
 resp = tools_call(proc, "list_connections", {})
@@ -224,13 +201,14 @@ try:
     tools = json.loads(resp).get("result", {}).get("tools", [])
     names = [t["name"] for t in tools]
     expected = {"add_connection", "update_connection", "delete_connection",
-                "list_connections", "query", "commit"}
+                "list_connections", "query", "execute",
+                "list_databases", "create_database", "alter_database", "drop_database"}
     missing = expected - set(names)
     if missing:
         print(f"  [FAIL] 缺少工具: {missing}")
         failed += 1
     else:
-        print(f"  [PASS] 6 个工具全部注册: {', '.join(names)}")
+        print(f"  [PASS] 10 个工具全部注册: {', '.join(names)}")
         passed += 1
 except Exception as e:
     print(f"  [WARN] tools/list 解析失败: {e}")
@@ -239,7 +217,6 @@ except Exception as e:
 proc.terminate()
 proc.wait()
 
-# ════════════════════════════════════════════════════════════
 print()
 print("=" * 60)
 print(f"  结果: {passed} PASS | {failed} FAIL")

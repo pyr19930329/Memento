@@ -1,4 +1,4 @@
-namespace Memento.MCP.Services.GlobalException;
+namespace Memento.MCP.Services;
 
 /// <summary>全局异常处理 — 捕获未处理的异常并打印友好信息</summary>
 public static class GlobalException

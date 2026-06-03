@@ -28,4 +28,12 @@ public class SqlSugarUtil
         
         return GetClient(dbConnectionInfo.ConnectionString, dbConnectionInfo.DbType);
     }
+
+    /// <summary>测试数据库连接是否可达，失败时抛出异常</summary>
+    public static void TestConnection(string connectionString, string dbType)
+    {
+        var client = GetClient(connectionString, dbType);
+        if (!client.Ado.IsValidConnection())
+            throw new InvalidOperationException("数据库连接失败");
+    }
 }

@@ -2,7 +2,6 @@ using McpDotNet.Protocol.Transport;
 using McpDotNet.Server;
 using Memento.MCP.Register;
 using Memento.MCP.Services;
-using Memento.MCP.Services.GlobalException;
 
 // ── 1. 全局异常 ──
 GlobalException.Register();
