@@ -78,8 +78,7 @@ public class ConnectionManager
         if (_connections.ContainsKey(name))
             return (false, $"连接 '{name}' 已存在");
 
-        _connections[name] = new DbConnectionInfo
-        {
+        _connections[name] = new DbConnectionInfo {
             Name = name,
             ConnectionString = connectionString,
             DbType = dbType,
@@ -95,15 +94,12 @@ public class ConnectionManager
         string? connectionString = null,
         string? dbType = null)
     {
-        if (!_connections.TryGetValue(name, out var info))
-            return (false, $"连接 '{name}' 不存在");
-
+        if (!_connections.TryGetValue(name, out var info)) return (false, $"连接 '{name}' 不存在");
         if (connectionString != null) info.ConnectionString = connectionString;
         if (dbType != null) info.DbType = dbType;
         info.UpdatedAt = DateTime.UtcNow;
 
-        if (newName != null && newName != name)
-        {
+        if (newName != null && newName != name) {
             if (_connections.ContainsKey(newName))
                 return (false, $"新名称 '{newName}' 已存在");
             _connections.Remove(name);
