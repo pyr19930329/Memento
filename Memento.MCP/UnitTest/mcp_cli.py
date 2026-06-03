@@ -1,89 +1,70 @@
 """
-MCP Server 交互式测试工具
-选择序号 → 看 arguments 模板 → 粘贴 JSON → 自动发送
+MCP Server 交互式测试工具 — HTTP 模式
 """
 import json
-import subprocess
+import os
+import urllib.request
 
-SERVER = r"H:\Memento.MCP\Memento.MCP\Memento.MCP\bin\Debug\net10.0\Memento.MCP.exe"
-
-
-def _example_value(pname: str, pschema: dict) -> str:
-    ptype = pschema.get("type", "string")
-    examples = {
-        "string": f"example_{pname}",
-        "number": "123", "integer": "123", "boolean": "true",
-        "array": '["item1", "item2"]', "object": '{"key": "value"}',
-    }
-    return examples.get(ptype, "example_" + pname)
+BASE_URL = os.environ.get("MCP_URL", "http://localhost:18080/mcp")
+next_id = 100
 
 
-def _display_response(resp_raw: str):
+def rpc(method: str, params: dict | None = None) -> dict:
+    global next_id
+    req = {"jsonrpc": "2.0", "id": next_id, "method": method}
+    next_id += 1
+    if params is not None:
+        req["params"] = params
+    data = json.dumps(req, ensure_ascii=False).encode("utf-8")
+    http = urllib.request.Request(BASE_URL, data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST")
+    with urllib.request.urlopen(http) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def display(resp: dict):
+    content = resp.get("result", {}).get("content", [])
+    if not content:
+        print(f"  返回: {json.dumps(resp, ensure_ascii=False)}")
+        return
+    text = content[0].get("text", "")
     try:
-        data = json.loads(resp_raw)
-        content = data.get("result", {}).get("content", [])
-        if not content:
-            print(f"  返回: {json.dumps(data, ensure_ascii=False)}")
+        inner = json.loads(text)
+        if isinstance(inner, list) and len(inner) > 0 and isinstance(inner[0], dict):
+            keys = list(inner[0].keys())
+            col_widths = {k: len(k) for k in keys}
+            for row in inner:
+                for k in keys:
+                    val = str(row.get(k, ""))
+                    col_widths[k] = max(col_widths[k], len(val))
+            sep = "  " + "  ".join("\u2500" * col_widths[k] for k in keys)
+            print(f"  {sep}")
+            print("  " + "  ".join(k.ljust(col_widths[k]) for k in keys))
+            print(f"  {sep}")
+            for row in inner:
+                line = "  " + "  ".join(str(row.get(k, "")).ljust(col_widths[k]) for k in keys)
+                print(line)
+            print(f"  {sep}")
+            print(f"  共 {len(inner)} 条记录")
             return
-        text = content[0].get("text", "")
-        try:
-            inner = json.loads(text)
-            if isinstance(inner, list) and len(inner) > 0 and isinstance(inner[0], dict):
-                keys = list(inner[0].keys())
-                col_widths = {k: len(k) for k in keys}
-                for row in inner:
-                    for k in keys:
-                        val = str(row.get(k, ""))
-                        col_widths[k] = max(col_widths[k], len(val))
-                header = "  " + "  ".join(k.ljust(col_widths[k]) for k in keys)
-                sep = "  " + "  ".join("\u2500" * col_widths[k] for k in keys)
-                print(f"  {sep}")
-                print(f"  {header}")
-                print(f"  {sep}")
-                for row in inner:
-                    line = "  " + "  ".join(str(row.get(k, "")).ljust(col_widths[k]) for k in keys)
-                    print(f"  {line}")
-                print(f"  {sep}")
-                print(f"  共 {len(inner)} 条记录")
-                return
-        except (json.JSONDecodeError, TypeError, IndexError):
-            pass
-        print(f"  返回: {json.dumps(data, ensure_ascii=False)}")
-    except json.JSONDecodeError:
-        print(f"  返回: {resp_raw}")
+    except (json.JSONDecodeError, TypeError, IndexError):
+        pass
+    print(f"  返回: {json.dumps(resp, ensure_ascii=False)}")
 
 
 def main():
-    proc = subprocess.Popen(
-        [SERVER],
-        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        text=True, bufsize=1,
-    )
-    next_id = 1
-
-    def send(req: dict):
-        nonlocal next_id
-        if "id" not in req:
-            req["id"] = next_id
-            next_id += 1
-        line = json.dumps(req, ensure_ascii=False)
-        proc.stdin.write(line + "\n")
-        proc.stdin.flush()
-        resp = proc.stdout.readline()
-        return resp
-
     print("=" * 54)
-    print("  Memento.MCP — 交互式测试终端")
+    print("  Memento.MCP — HTTP 交互式终端")
+    print(f"  Target: {BASE_URL}")
     print("=" * 54)
-    send({"jsonrpc": "2.0", "method": "initialize",
-          "params": {"protocolVersion": "2024-11-05", "capabilities": {},
-                     "clientInfo": {"name": "manual", "version": "1.0.0"}}})
-    proc.stdin.write(json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + "\n")
-    proc.stdin.flush()
+
+    rpc("initialize", {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "cli", "version": "1.0.0"}})
+    rpc("notifications/initialized")
     print("  已连接\n")
 
-    resp = send({"jsonrpc": "2.0", "method": "tools/list", "params": {}})
-    tools = json.loads(resp).get("result", {}).get("tools", [])
+    resp = rpc("tools/list")
+    tools = resp.get("result", {}).get("tools", [])
 
     while True:
         print("─" * 54)
@@ -111,30 +92,29 @@ def main():
         props = tool.get("inputSchema", {}).get("properties", {})
 
         print(f"\n  ── {name} ──")
-        print(f"  {tool.get('description', '')}")
-        print()
+        print(f"  {tool.get('description', '')}\n")
 
         if not props:
-            req = {
-                "jsonrpc": "2.0",
-                "method": "tools/call",
-                "params": {"name": name, "arguments": {}},
-            }
-            print(f"  发送: {json.dumps(req, ensure_ascii=False)}")
-            resp = send(req)
-            _display_response(resp)
+            resp = rpc("tools/call", {"name": name, "arguments": {}})
+            display(resp)
             print()
             continue
 
         example_args = {}
         for pname, pschema in props.items():
-            example_args[pname] = _example_value(pname, pschema)
+            ptype = pschema.get("type", "string")
+            examples = {
+                "string": f"example_{pname}",
+                "number": "123", "integer": "123", "boolean": "true",
+                "array": '["item1", "item2"]', "object": '{"key": "value"}',
+            }
+            example_args[pname] = examples.get(ptype, f"example_{pname}")
 
-        print(f"  参数模板：")
+        print("  参数模板：")
         for line in json.dumps(example_args, ensure_ascii=False, indent=2).split("\n"):
             print(f"    {line}")
         print()
-        print(f"  输入 arguments JSON（直接回车跳过）：")
+        print("  输入 arguments JSON（直接回车跳过）：")
 
         args_input = input("  > ").strip()
         if not args_input:
@@ -144,28 +124,18 @@ def main():
         try:
             args = json.loads(args_input)
         except json.JSONDecodeError as e:
-            print(f"  参数解析失败: {e}")
-            print()
+            print(f"  参数解析失败: {e}\n")
             continue
 
         if not isinstance(args, dict):
-            print("  参数必须是 JSON 对象")
-            print()
+            print("  参数必须是 JSON 对象\n")
             continue
 
         print()
-        req = {
-            "jsonrpc": "2.0",
-            "method": "tools/call",
-            "params": {"name": name, "arguments": args},
-        }
-        print(f"  发送: {json.dumps(req, ensure_ascii=False)}")
-        resp = send(req)
-        _display_response(resp)
+        resp = rpc("tools/call", {"name": name, "arguments": args})
+        display(resp)
         print()
 
-    proc.terminate()
-    proc.wait()
     print("再见")
 
 

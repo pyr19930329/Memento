@@ -1,5 +1,3 @@
-using McpDotNet.Protocol.Types;
-
 namespace Memento.MCP.Register;
 
 /// <summary>
@@ -23,7 +21,7 @@ public class McpTool
     public Func<Dictionary<string, object?>?, Task<CallToolResponse>> Handler { get; init; } = _ => Task.FromResult(new CallToolResponse { Content = [] });
 
     /// <summary>转换为 MCP 协议中的 Tool 对象（用于 tools/list 返回）</summary>
-    public Tool ToTool() => new()
+    public ToolDef ToTool() => new()
     {
         Name = Name,
         Description = Description,

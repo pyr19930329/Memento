@@ -1,25 +1,26 @@
-using McpDotNet.Protocol.Transport;
-using McpDotNet.Server;
 using Memento.MCP.Register;
 using Memento.MCP.Services;
 
-// ── 1. 全局异常 ──
+// ── 1. 构建 ASP.NET Core 应用 ──
+var builder = WebApplication.CreateBuilder(args);
+
+// ── 2. 端口配置：命令行参数 > appsettings.json > 默认 8080 ──
+var port = args.Length > 0 ? args[0] : builder.Configuration["Port"] ?? "9876";
+builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+
+var app = builder.Build();
+
+// ── 3. 全局异常 ──
 GlobalException.Register();
 
-// ── 2. 服务 ──
+// ── 4. 服务 + 自动注册 Toolsets ──
 ConnectionManager connManager = new();
-
-// ── 2. 自动注册 Toolsets ──
 McpToolRegistry registry = new();
 registry.RegisterAllToolsets(connManager);
 
-// ── 3. 启动服务器 ──
-McpServerOptions options = new() {
-    ServerInfo = new() { Name = "Memento.MCP", Version = "1.0.0" },
-    Capabilities = registry.BuildCapabilities(),
-};
+// ── 5. 注册 MCP SSE 端点 ──
+McpSseEndpoint.Map(app, registry);
 
-await using IMcpServer server = McpServerFactory.Create(new StdioServerTransport("Memento.MCP"), options);
-await server.StartAsync();
-
-await Task.Delay(Timeout.Infinite);
+// ── 6. 启动 ──
+Console.Error.WriteLine($"[MCP] SSE server starting on http://localhost:{port}/mcp");
+app.Run();

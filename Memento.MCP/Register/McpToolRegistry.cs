@@ -1,8 +1,6 @@
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using McpDotNet.Protocol.Types;
-using McpDotNet.Server;
 using Memento.MCP.Register.Attributes;
 
 namespace Memento.MCP.Register;
@@ -253,41 +251,35 @@ public class McpToolRegistry
     {
         Tools = new()
         {
-            ListToolsHandler = ListToolsHandler,
-            CallToolHandler = CallToolHandler,
+            ListToolsHandler = () => Task.FromResult(new ListToolsResult
+            {
+                Tools = _tools.Select(t => t.ToTool()).ToList(),
+            }),
+            CallToolHandler = async (name, args) =>
+            {
+                var tool = _tools.FirstOrDefault(t => t.Name == name);
+                if (tool == null)
+                    return new CallToolResponse
+                    {
+                        Content = [new() { Text = $"未知工具: '{name}'", Type = "text" }],
+                        IsError = true,
+                    };
+
+                try
+                {
+                    return await tool.Handler(args);
+                }
+                catch (Exception ex)
+                {
+                    return new CallToolResponse
+                    {
+                        Content = [new() { Text = $"执行失败: {ex.Message}", Type = "text" }],
+                        IsError = true,
+                    };
+                }
+            },
         },
     };
-
-    // ── 内部处理 ──
-
-    private Task<ListToolsResult> ListToolsHandler(
-        RequestContext<ListToolsRequestParams> context, CancellationToken ct) =>
-        Task.FromResult(new ListToolsResult
-        {
-            Tools = _tools.Select(t => t.ToTool()).ToList(),
-        });
-
-    private async Task<CallToolResponse> CallToolHandler(
-        RequestContext<CallToolRequestParams> context, CancellationToken ct)
-    {
-        var name = context.Params?.Name;
-        var tool = _tools.FirstOrDefault(t => t.Name == name);
-        if (tool == null)
-            throw new McpServerException($"未知工具: '{name}'");
-
-        try
-        {
-            return await tool.Handler(context.Params?.Arguments as Dictionary<string, object?>);
-        }
-        catch (Exception ex)
-        {
-            return new CallToolResponse
-            {
-                Content = [new() { Text = $"执行失败: {ex.Message}", Type = "text" }],
-                IsError = true,
-            };
-        }
-    }
 
     // ── 类型映射 ──
 

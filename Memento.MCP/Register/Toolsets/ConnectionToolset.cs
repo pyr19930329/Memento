@@ -1,5 +1,4 @@
 using System.Text.Json;
-using McpDotNet.Protocol.Types;
 using Memento.MCP.Register.Attributes;
 using Memento.MCP.Register.Toolsets.Request;
 using Memento.MCP.Services;

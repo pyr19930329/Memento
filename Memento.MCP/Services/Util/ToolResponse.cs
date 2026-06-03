@@ -1,4 +1,4 @@
-using McpDotNet.Protocol.Types;
+using Memento.MCP.Register;
 
 namespace Memento.MCP.Services.Util;
 
