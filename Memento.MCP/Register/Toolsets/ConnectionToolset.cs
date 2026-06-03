@@ -1,6 +1,7 @@
 using System.Text.Json;
 using McpDotNet.Protocol.Types;
 using Memento.MCP.Register.Attributes;
+using Memento.MCP.Register.Toolsets.Request;
 using Memento.MCP.Services;
 
 namespace Memento.MCP.Register.Toolsets;
@@ -18,28 +19,25 @@ public class ConnectionToolset
 
     // ── 工具方法 ──
     [Tool(Name = "add_connection", Description = "添加数据库连接")]
-    public CallToolResponse AddConnection(
-        [McpParam("连接名称（唯一标识）")] string name, 
-        [McpParam("数据库连接字符串")] string connection_string, 
-        [McpParam("数据库类型：MySql / SqlServer / PostgreSQL，默认 MySql")] string db_type = "MySql")
+    public CallToolResponse AddConnection([McpBody] AddConnectionRequest req)
     {
-        if (string.IsNullOrWhiteSpace(name)) return Error("连接名称不能为空");
-        if (_conn.Get(name) != null) return Error($"连接 '{name}' 已存在");
-        var (ok, msg) = _conn.Add(name, connection_string, db_type);
+        if (string.IsNullOrWhiteSpace(req.Name)) return Error("连接名称不能为空");
+        if (_conn.Get(req.Name) != null) return Error($"连接 '{req.Name}' 已存在");
+
+        var dbType = req.DbType ?? "MySql";
+        var (ok, msg) = _conn.Add(req.Name, req.ConnectionString, dbType);
         return Result(ok, msg);
     }
 
     [Tool(Name = "update_connection", Description = "修改数据库连接")]
-    public CallToolResponse UpdateConnection(
-        [McpBody] UpdateConnectionRequest req)
+    public CallToolResponse UpdateConnection([McpBody] UpdateConnectionRequest req)
     {
         var (ok, msg) = _conn.Update(req.Name, req.NewName, req.ConnectionString, req.DbType);
         return Result(ok, msg);
     }
 
     [Tool(Name = "delete_connection", Description = "删除数据库连接")]
-    public CallToolResponse DeleteConnection(
-        [McpParam("要删除的连接名称")] string name)
+    public CallToolResponse DeleteConnection([McpParam("要删除的连接名称")] string name)
     {
         var (ok, msg) = _conn.Delete(name);
         return Result(ok, msg);

@@ -1,6 +1,6 @@
 using Memento.MCP.Register.Attributes;
 
-namespace Memento.MCP.Register.Toolsets;
+namespace Memento.MCP.Register.Toolsets.Request;
 
 public class UpdateConnectionRequest
 {

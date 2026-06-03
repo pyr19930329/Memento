@@ -11,8 +11,7 @@ McpToolRegistry registry = new();
 registry.RegisterAllToolsets(connManager);
 
 // ── 3. 启动服务器 ──
-McpServerOptions options = new()
-{
+McpServerOptions options = new() {
     ServerInfo = new() { Name = "Memento.MCP", Version = "1.0.0" },
     Capabilities = registry.BuildCapabilities(),
 };
