@@ -17,39 +17,47 @@ public class ConnectionToolset
 
     public ConnectionToolset(ConnectionManager conn) => _conn = conn;
 
-    // ── 工具方法 ──
     [Tool(Name = "add_connection", Description = "添加数据库连接")]
-    public CallToolResponse AddConnection([McpBody] AddConnectionRequest req)
-    {
+    public CallToolResponse AddConnection([McpBody] AddConnectionRequest req) {
         if (string.IsNullOrWhiteSpace(req.Name)) return Error("连接名称不能为空");
+        if (string.IsNullOrWhiteSpace(req.ConnectionString)) return Error("连接字符串不能为空");
+        if (string.IsNullOrWhiteSpace(req.DbType)) return Error("数据库类型不能为空");
         if (_conn.Get(req.Name) != null) return Error($"连接 '{req.Name}' 已存在");
 
+        var client = SqlSugarUtil.GetClient(req.ConnectionString, req.DbType);
+        var result = client.Ado.IsValidConnection();
+        if (!result) return Error("数据库连接失败");
+        
         var dbType = req.DbType ?? "MySql";
         var (ok, msg) = _conn.Add(req.Name, req.ConnectionString, dbType);
         return Result(ok, msg);
     }
 
     [Tool(Name = "update_connection", Description = "修改数据库连接")]
-    public CallToolResponse UpdateConnection([McpBody] UpdateConnectionRequest req)
-    {
+    public CallToolResponse UpdateConnection([McpBody] UpdateConnectionRequest req) {
+        if (string.IsNullOrWhiteSpace(req.Name)) return Error("连接名称不能为空");
+        if (string.IsNullOrWhiteSpace(req.ConnectionString)) return Error("连接字符串不能为空");
+        if (string.IsNullOrWhiteSpace(req.DbType)) return Error("数据库类型不能为空");
+        
+        var client = SqlSugarUtil.GetClient(req.ConnectionString, req.DbType);
+        var result = client.Ado.IsValidConnection();
+        if (!result) return Error("数据库连接失败");
+        
         var (ok, msg) = _conn.Update(req.Name, req.NewName, req.ConnectionString, req.DbType);
         return Result(ok, msg);
     }
 
     [Tool(Name = "delete_connection", Description = "删除数据库连接")]
-    public CallToolResponse DeleteConnection([McpParam("要删除的连接名称")] string name)
-    {
+    public CallToolResponse DeleteConnection([McpParam("要删除的连接名称")] string name) {
+        if (string.IsNullOrWhiteSpace(name)) return Error("连接名称不能为空");
         var (ok, msg) = _conn.Delete(name);
         return Result(ok, msg);
     }
 
     [Tool(Name = "list_connections", Description = "列出所有已保存的数据库连接")]
-    public CallToolResponse ListConnections()
-    {
+    public CallToolResponse ListConnections() {
         var list = _conn.List();
-        if (list.Count == 0)
-            return Ok("暂无保存的数据库连接");
-
+        if (list.Count == 0) return Ok("暂无保存的数据库连接");
         return Ok(JsonSerializer.Serialize(list, JsonOpts));
     }
 

@@ -9,6 +9,7 @@
 
     <ItemGroup>
       <PackageReference Include="mcpdotnet" Version="1.2.0.1" />
+      <PackageReference Include="SqlSugarCore" Version="5.1.4.215-preview13" />
     </ItemGroup>
 
     <ItemGroup>

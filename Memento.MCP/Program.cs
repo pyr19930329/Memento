@@ -3,7 +3,10 @@ using McpDotNet.Server;
 using Memento.MCP.Register;
 using Memento.MCP.Services;
 
-// ── 1. 服务 ──
+// ── 1. 全局异常 ──
+GlobalException.Register();
+
+// ── 2. 服务 ──
 ConnectionManager connManager = new();
 
 // ── 2. 自动注册 Toolsets ──
