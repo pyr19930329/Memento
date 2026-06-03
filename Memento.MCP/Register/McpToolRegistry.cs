@@ -295,6 +295,7 @@ public class McpToolRegistry
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
         PropertyNameCaseInsensitive = true,
+        NumberHandling = JsonNumberHandling.AllowReadingFromString,
     };
 
     private static string MapType(Type type)
