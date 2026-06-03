@@ -57,6 +57,97 @@ public static class DatabaseUtil
     public static string DropDatabaseSql(string dbType, string name) =>
         $"DROP DATABASE {QuoteName(name, dbType)}";
 
+    // ── 表操作 ──
+
+    public static string QualifyTable(string tableName, string? databaseName, string dbType) =>
+        databaseName != null ? $"{QuoteName(databaseName, dbType)}.{QuoteName(tableName, dbType)}" : QuoteName(tableName, dbType);
+
+    /// <summary>获取建表 SQL</summary>
+    public static string CreateTableSql(string dbType, string tableName, List<ColumnDef> columns, string? databaseName = null)
+    {
+        var q = QualifyTable(tableName, databaseName, dbType);
+        var cols = columns.Select(c =>
+        {
+            var parts = new List<string> { QuoteName(c.Name, dbType), c.Type };
+            if (c.AutoIncrement) parts.Add("AUTO_INCREMENT");
+            if (!c.Nullable) parts.Add("NOT NULL");
+            if (c.DefaultValue != null) parts.Add($"DEFAULT {c.DefaultValue}");
+            if (c.PrimaryKey) parts.Add("PRIMARY KEY");
+            if (c.Comment != null && dbType.ToLowerInvariant() == "mysql")
+                parts.Add($"COMMENT '{c.Comment}'");
+            return string.Join(" ", parts);
+        });
+        return $"CREATE TABLE {q} (\n  {string.Join(",\n  ", cols)}\n)";
+    }
+
+    /// <summary>获取删除表的 SQL</summary>
+    public static string DropTableSql(string dbType, string tableName, string? databaseName = null) =>
+        $"DROP TABLE {QualifyTable(tableName, databaseName, dbType)}";
+
+    /// <summary>获取清空表的 SQL</summary>
+    public static string TruncateTableSql(string dbType, string tableName, string? databaseName = null) =>
+        $"TRUNCATE TABLE {QualifyTable(tableName, databaseName, dbType)}";
+
+    /// <summary>获取添加字段的 SQL</summary>
+    public static string AlterTableAddColumnSql(string dbType, string tableName, ColumnDef column, string? databaseName = null)
+    {
+        var q = QualifyTable(tableName, databaseName, dbType);
+        var parts = new List<string> { "ADD", QuoteName(column.Name, dbType), column.Type };
+        if (!column.Nullable) parts.Add("NOT NULL");
+        if (column.DefaultValue != null) parts.Add($"DEFAULT {column.DefaultValue}");
+        if (column.Comment != null && dbType.ToLowerInvariant() == "mysql")
+            parts.Add($"COMMENT '{column.Comment}'");
+        return $"ALTER TABLE {q} {string.Join(" ", parts)}";
+    }
+
+    /// <summary>获取删除字段的 SQL</summary>
+    public static string AlterTableDropColumnSql(string dbType, string tableName, string columnName, string? databaseName = null) =>
+        $"ALTER TABLE {QualifyTable(tableName, databaseName, dbType)} DROP {QuoteName(columnName, dbType)}";
+
+    /// <summary>获取修改字段的 SQL</summary>
+    public static string AlterTableModifyColumnSql(string dbType, string tableName, ColumnDef column, string? databaseName = null)
+    {
+        var q = QualifyTable(tableName, databaseName, dbType);
+        var sql = dbType.ToLowerInvariant() switch
+        {
+            "mysql" => $"ALTER TABLE {q} MODIFY COLUMN ",
+            _ => $"ALTER TABLE {q} ALTER COLUMN ",
+        };
+        var parts = new List<string> { QuoteName(column.Name, dbType), column.Type };
+        if (!column.Nullable) parts.Add("NOT NULL");
+        if (column.DefaultValue != null) parts.Add($"DEFAULT {column.DefaultValue}");
+        return sql + string.Join(" ", parts);
+    }
+
+    /// <summary>获取描述表结构的 SQL</summary>
+    public static string DescribeTableSql(string dbType, string tableName, string databaseName)
+    {
+        var q = QualifyTable(tableName, databaseName, dbType);
+        return dbType.ToLowerInvariant() switch
+        {
+            "mysql" => $"DESCRIBE {q}",
+            "postgresql" or "postgres" => $"SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema = '{databaseName}' AND table_name = '{tableName}'",
+            "sqlserver" => $"SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMN_DEFAULT FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_CATALOG = '{databaseName}' AND TABLE_NAME = '{tableName}'",
+            _ => throw new ArgumentException($"不支持的数据库类型: {dbType}"),
+        };
+    }
+
+    /// <summary>获取列出所有表的 SQL，支持模糊查询</summary>
+    public static string ListTablesSql(string dbType, string databaseName, string? pattern = null)
+    {
+        var sql = dbType.ToLowerInvariant() switch
+        {
+            "mysql" => $"SELECT TABLE_NAME AS name FROM information_schema.tables WHERE TABLE_SCHEMA = '{databaseName}' AND TABLE_TYPE = 'BASE TABLE'",
+            "postgresql" or "postgres" => $"SELECT tablename AS name FROM pg_catalog.pg_tables WHERE schemaname = '{databaseName}'",
+            "sqlserver" => $"SELECT TABLE_NAME AS name FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_CATALOG = '{databaseName}' AND TABLE_TYPE = 'BASE TABLE'",
+            _ => throw new ArgumentException($"不支持的数据库类型: {dbType}"),
+        };
+        if (!string.IsNullOrWhiteSpace(pattern))
+            sql += $" AND name LIKE '%{pattern}%'";
+        sql += " ORDER BY name";
+        return sql;
+    }
+
     /// <summary>将 DataTable 转为字典列表（用于 JSON 序列化）</summary>
     public static List<Dictionary<string, object?>> DataTableToList(DataTable dt)
     {

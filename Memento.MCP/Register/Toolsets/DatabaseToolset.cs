@@ -17,17 +17,11 @@ public class DatabaseToolset
     [Tool(Name = "list_databases", Description = "列出数据库服务器上的所有数据库")]
     public CallToolResponse ListDatabases([McpParam("已保存的连接名称")] string connection_name) {
         
-        if (string.IsNullOrWhiteSpace(connection_name)) {
-            return ToolResponse.Error("连接名称不能为空");
-        }
+        if (string.IsNullOrWhiteSpace(connection_name)) return ToolResponse.Error("连接名称不能为空");
 
         var db = SqlSugarUtil.GetClientByName(connection_name);
         var sql = DatabaseUtil.ListDatabasesSql(db.CurrentConnectionConfig.DbType.ToString());
-        var names = db.Ado.GetDataTable(sql).Rows
-            .Cast<System.Data.DataRow>()
-            .Select(r => r[0]?.ToString() ?? "")
-            .OrderBy(n => n)
-            .ToList();
+        var names = db.Ado.GetDataTable(sql).Rows.Cast<System.Data.DataRow>().Select(r => r[0]?.ToString() ?? "").OrderBy(n => n).ToList();
         return ToolResponse.Ok(JsonSerializer.Serialize(names, JsonOpts));
     }
 

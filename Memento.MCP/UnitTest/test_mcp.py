@@ -202,13 +202,14 @@ try:
     names = [t["name"] for t in tools]
     expected = {"add_connection", "update_connection", "delete_connection",
                 "list_connections", "query", "execute",
-                "list_databases", "create_database", "alter_database", "drop_database"}
+                "list_databases", "create_database", "alter_database", "drop_database",
+                "describe_table", "create_table", "alter_table", "drop_table", "truncate_table"}
     missing = expected - set(names)
     if missing:
         print(f"  [FAIL] 缺少工具: {missing}")
         failed += 1
     else:
-        print(f"  [PASS] 10 个工具全部注册: {', '.join(names)}")
+        print(f"  [PASS] 15 个工具全部注册: {', '.join(names)}")
         passed += 1
 except Exception as e:
     print(f"  [WARN] tools/list 解析失败: {e}")
