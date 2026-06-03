@@ -1,6 +1,6 @@
 ﻿using SqlSugar;
 
-namespace Memento.MCP.Services;
+namespace Memento.MCP.Services.Util;
 
 public class SqlSugarUtil
 {

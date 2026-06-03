@@ -22,3 +22,4 @@ public class AddConnectionRequest
     [McpParam("数据库类型：MySql / SqlServer / PostgreSQL，默认 MySql")]
     public string? DbType { get; set; }
 }
+
