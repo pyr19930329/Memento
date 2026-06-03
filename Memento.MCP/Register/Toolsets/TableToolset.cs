@@ -7,8 +7,7 @@ using Memento.MCP.Services.Util;
 namespace Memento.MCP.Register.Toolsets;
 
 [McpToolset]
-public class TableToolset
-{
+public class TableToolset {
     private static readonly JsonSerializerOptions JsonOpts = new() {
         WriteIndented = true,
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
@@ -64,18 +63,15 @@ public class TableToolset
         var db = SqlSugarUtil.GetClientByName(req.ConnectionName);
         var dbType = db.CurrentConnectionConfig.DbType.ToString();
 
-        string sql = req.Operation.ToLowerInvariant() switch
-        {
-            "add" => DatabaseUtil.AlterTableAddColumnSql(dbType, req.TableName, new ColumnDef
-            {
+        var sql = req.Operation.ToLowerInvariant() switch {
+            "add" => DatabaseUtil.AlterTableAddColumnSql(dbType, req.TableName, new ColumnDef {
                 Name = req.ColumnName ?? "",
                 Type = req.ColumnType ?? "varchar(255)",
                 Nullable = req.Nullable ?? true,
                 DefaultValue = req.DefaultValue,
             }, req.DatabaseName),
             "drop" => DatabaseUtil.AlterTableDropColumnSql(dbType, req.TableName, req.ColumnName ?? "", req.DatabaseName),
-            "modify" => DatabaseUtil.AlterTableModifyColumnSql(dbType, req.TableName, new ColumnDef
-            {
+            "modify" => DatabaseUtil.AlterTableModifyColumnSql(dbType, req.TableName, new ColumnDef {
                 Name = req.ColumnName ?? "",
                 Type = req.ColumnType ?? "varchar(255)",
                 Nullable = req.Nullable ?? true,
