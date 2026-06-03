@@ -5,7 +5,7 @@ import json
 import os
 import urllib.request
 
-BASE_URL = os.environ.get("MCP_URL", "http://localhost:18080/mcp")
+BASE_URL = os.environ.get("MCP_URL", "http://localhost:9876/mcp")
 next_id = 100
 
 

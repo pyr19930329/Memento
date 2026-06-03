@@ -16,6 +16,19 @@
       <None Update="appsettings.json">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       </None>
+      <None Remove="__pycache__\**" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Compile Remove="__pycache__\**" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <EmbeddedResource Remove="__pycache__\**" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Content Remove="__pycache__\**" />
     </ItemGroup>
 
 </Project>
