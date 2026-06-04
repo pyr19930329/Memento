@@ -43,6 +43,28 @@ public class DatabaseToolset
         if (string.IsNullOrWhiteSpace(req.NewDatabaseName)) return ToolResponse.Error("新数据库名称不能为空");
         var db = SqlSugarUtil.GetClientByName(req.ConnectionName);
         var dbType = db.CurrentConnectionConfig.DbType.ToString();
+
+        if (dbType.ToLowerInvariant() == "mysql")
+        {
+            // MySQL 5.1+ 已移除 RENAME DATABASE，改用建新库→迁移表→删旧库
+            var tables = db.Ado.GetDataTable(
+                $"SELECT TABLE_NAME FROM information_schema.tables WHERE TABLE_SCHEMA = '{req.DatabaseName}' AND TABLE_TYPE = 'BASE TABLE'");
+            var tableNames = tables.Rows.Cast<System.Data.DataRow>().Select(r => r[0]?.ToString()).Where(n => n != null).Cast<string>().ToList();
+
+            var qOld = DatabaseUtil.QuoteName(req.DatabaseName, dbType);
+            var qNew = DatabaseUtil.QuoteName(req.NewDatabaseName, dbType);
+
+            db.Ado.ExecuteCommand($"CREATE DATABASE {qNew}");
+            foreach (var t in tableNames)
+            {
+                var qT = DatabaseUtil.QuoteName(t, dbType);
+                db.Ado.ExecuteCommand($"RENAME TABLE {qOld}.{qT} TO {qNew}.{qT}");
+            }
+            db.Ado.ExecuteCommand($"DROP DATABASE {qOld}");
+
+            return ToolResponse.Ok($"数据库 '{req.DatabaseName}' 已重命名为 '{req.NewDatabaseName}'（迁移 {tableNames.Count} 张表）");
+        }
+
         var sql = DatabaseUtil.AlterDatabaseSql(dbType, req.DatabaseName, req.NewDatabaseName);
         db.Ado.ExecuteCommand(sql);
         return ToolResponse.Ok($"数据库 '{req.DatabaseName}' 已重命名为 '{req.NewDatabaseName}'");

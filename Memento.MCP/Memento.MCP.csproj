@@ -18,6 +18,7 @@
       </None>
       <None Remove="__pycache__\**" />
       <None Remove="logs\**" />
+      <None Remove=".gitignore" />
     </ItemGroup>
 
     <ItemGroup>

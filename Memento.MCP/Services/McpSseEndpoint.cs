@@ -147,6 +147,7 @@ public static class McpSseEndpoint
             JsonValueKind.True => true,
             JsonValueKind.False => false,
             JsonValueKind.Null => null,
+            JsonValueKind.Array or JsonValueKind.Object => el,  // 保留原始 JsonElement，避免转成字符串
             _ => el.GetRawText(),
         };
     }

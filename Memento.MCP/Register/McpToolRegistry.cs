@@ -297,6 +297,8 @@ public class McpToolRegistry
         if (t == typeof(int) || t == typeof(long)) return "integer";
         if (t == typeof(double) || t == typeof(float) || t == typeof(decimal)) return "number";
         if (t == typeof(bool)) return "boolean";
+        if (t.IsGenericType && t.GetGenericTypeDefinition() == typeof(List<>)) return "array";
+        if (t.IsArray) return "array";
         return "string";
     }
 

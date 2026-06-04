@@ -143,7 +143,16 @@ public static class DatabaseUtil
             _ => throw new ArgumentException($"不支持的数据库类型: {dbType}"),
         };
         if (!string.IsNullOrWhiteSpace(pattern))
-            sql += $" AND name LIKE '%{pattern}%'";
+        {
+            var nameCol = dbType.ToLowerInvariant() switch
+            {
+                "mysql" => "TABLE_NAME",
+                "postgresql" or "postgres" => "tablename",
+                "sqlserver" => "TABLE_NAME",
+                _ => "name",
+            };
+            sql += $" AND {nameCol} LIKE '%{pattern}%'";
+        }
         sql += " ORDER BY name";
         return sql;
     }
