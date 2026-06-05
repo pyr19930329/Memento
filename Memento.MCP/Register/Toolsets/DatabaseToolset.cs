@@ -46,27 +46,24 @@ public class DatabaseToolset
         var db = SqlSugarUtil.GetClientByName(req.ConnectionName);
         var dbType = db.CurrentConnectionConfig.DbType.ToString();
 
-        if (dbType.ToLowerInvariant() == "mysql")
-        {
-            var tables = await db.Ado.GetDataTableAsync(
-                $"SELECT TABLE_NAME FROM information_schema.tables WHERE TABLE_SCHEMA = '{req.DatabaseName}' AND TABLE_TYPE = 'BASE TABLE'");
+        if (dbType.ToLowerInvariant() == "mysql") {
+            var tables = await db.Ado.GetDataTableAsync($"SELECT TABLE_NAME FROM information_schema.tables WHERE TABLE_SCHEMA = '{req.DatabaseName}' AND TABLE_TYPE = 'BASE TABLE'");
             var count = tables.Rows.Count;
             var tableNames = tables.Rows.Cast<System.Data.DataRow>().Select(r => r[0]?.ToString()).Where(n => n != null).Cast<string>().ToList();
 
-            if (!await ElicitUtil.ConfirmAsync(server, $"⚠️ 将重命名数据库 '{req.DatabaseName}' 为 '{req.NewDatabaseName}'（迁移 {count} 张表后删除旧库），是否确认？",
-                    cancellationToken))
-                return "[ERR] 操作已取消";
+            if (!await ElicitUtil.ConfirmAsync(server, $"⚠️ 将重命名数据库 '{req.DatabaseName}' 为 '{req.NewDatabaseName}'（迁移 {count} 张表后删除旧库），是否确认？", cancellationToken)) return "[ERR] 操作已取消";
 
             var qOld = DatabaseUtil.QuoteName(req.DatabaseName, dbType);
             var qNew = DatabaseUtil.QuoteName(req.NewDatabaseName, dbType);
 
+            var guid = BackupUtil.NewGuid();
             await db.Ado.ExecuteCommandAsync($"CREATE DATABASE {qNew}");
-            foreach (var t in tableNames)
-            {
+            foreach (var t in tableNames) {
                 var qT = DatabaseUtil.QuoteName(t, dbType);
                 await db.Ado.ExecuteCommandAsync($"RENAME TABLE {qOld}.{qT} TO {qNew}.{qT}");
             }
             await db.Ado.ExecuteCommandAsync($"DROP DATABASE {qOld}");
+            AuditLogger.Record(req.ConnectionName, $"ALTER DATABASE {qOld} → {qNew}", 0, guid);
             return $"数据库 '{req.DatabaseName}' 已重命名为 '{req.NewDatabaseName}'（迁移 {tableNames.Count} 张表）";
         }
 
@@ -83,9 +80,17 @@ public class DatabaseToolset
         if (!await ElicitUtil.ConfirmAsync(server, $"⚠️ 将永久删除数据库 '{req.DatabaseName}'，数据不可恢复！是否确认？", cancellationToken)) return "[ERR] 操作已取消";
         var db = SqlSugarUtil.GetClientByName(req.ConnectionName);
         var dbType = db.CurrentConnectionConfig.DbType.ToString();
+
+        // 备份所有表
+        var guid = BackupUtil.NewGuid();
+        var backupPaths = await BackupUtil.BackupDatabaseAsync(db, req.DatabaseName, guid, dbType);
+        AuditLogger.Record(req.ConnectionName,
+            $"DROP DATABASE {DatabaseUtil.QuoteName(req.DatabaseName, dbType)}",
+            0, guid, string.Join(", ", backupPaths));
+
         var sql = DatabaseUtil.DropDatabaseSql(dbType, req.DatabaseName);
         await db.Ado.ExecuteCommandAsync(sql);
-        return $"数据库 '{req.DatabaseName}' 已删除";
+        return $"数据库 '{req.DatabaseName}' 已删除（已备份 {backupPaths.Count} 张表到 {guid}）";
     }
 
     [McpServerTool, Description("执行 SQL 查询（SELECT），返回 JSON 结果")]
@@ -104,6 +109,7 @@ public class DatabaseToolset
     {
         if (string.IsNullOrWhiteSpace(connection_name)) return "[ERR] 连接名称不能为空";
         if (string.IsNullOrWhiteSpace(sql)) return "[ERR] SQL 语句不能为空";
+        if (!ConfigUtil.GetAppConfigBool("ExecuteSql")) return "[ERR] 禁止执行 SQL 命令";
         var db = SqlSugarUtil.GetClientByName(connection_name);
         var affected = await db.Ado.ExecuteCommandAsync(sql);
         return $"影响行数: {affected}";

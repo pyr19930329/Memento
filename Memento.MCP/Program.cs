@@ -16,17 +16,30 @@ builder.Services.AddSingleton<ConnectionManager>();
 
 // ── 5. 注册 MCP 服务器 ──
 builder.Services.AddMcpServer()
-    .WithHttpTransport(o => o.Stateless = false)
+    .WithHttpTransport(o =>
+    {
+        o.Stateless = false;
+#pragma warning disable MCP9004 // EnableLegacySse is marked obsolete but required for SSE clients
+        o.EnableLegacySse = true;
+#pragma warning restore MCP9004
+    })
     .WithTools<ConnectionToolset>()
     .WithTools<DatabaseToolset>()
     .WithTools<TableToolset>()
-    .WithTools<AuditToolset>();
+    .WithTools<AuditToolset>()
+    .WithTools<BackupToolset>();
 
 var app = builder.Build();
 
 // ── 6. 注册 MCP 端点 ──
-app.MapMcp("/mcp");
+//   Streamable HTTP: POST /                  — 主通信端点
+//   Legacy SSE:      GET  /sse               — SSE 流
+//                    POST /message           — SSE 消息发送
+app.MapMcp();
 
 // ── 7. 启动 ──
-Console.Error.WriteLine($"[MCP] SSE server starting on http://localhost:{port}/sse");
+Console.Error.WriteLine($"[MCP] Server starting on http://localhost:{port}");
+Console.Error.WriteLine($"[MCP]   Streamable HTTP: POST http://localhost:{port}/");
+Console.Error.WriteLine($"[MCP]   SSE stream:      GET  http://localhost:{port}/sse");
+Console.Error.WriteLine($"[MCP]   SSE messages:    POST http://localhost:{port}/message");
 app.Run();

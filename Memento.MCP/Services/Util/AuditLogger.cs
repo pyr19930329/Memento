@@ -20,11 +20,13 @@ public static partial class AuditLogger
     public enum Operation { Create, Query, Update, Delete, Alter }
 
     /// <summary>记录一条审计日志</summary>
-    public static void Record(string connectionName, string sql, long durationMs)
+    public static void Record(string connectionName, string sql, long durationMs, string? guid = null, string? backupFile = null)
     {
         var entry = Parse(sql);
         entry.ConnectionName = connectionName;
         entry.DurationMs = durationMs;
+        entry.Guid = guid;
+        entry.BackupFile = backupFile;
 
         _ = WriteAsync(connectionName, entry);
     }
@@ -208,6 +210,7 @@ public static partial class AuditLogger
 /// <summary>审计日志条目</summary>
 public class AuditEntry
 {
+    public string? Guid { get; set; }
     public string Timestamp { get; set; } = "";
     public string ConnectionName { get; set; } = "";
     public string? Database { get; set; }
@@ -216,4 +219,5 @@ public class AuditEntry
     public string Operation { get; set; } = "";
     public string Sql { get; set; } = "";
     public long DurationMs { get; set; }
+    public string? BackupFile { get; set; }
 }

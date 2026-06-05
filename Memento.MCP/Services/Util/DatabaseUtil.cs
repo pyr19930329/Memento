@@ -1,4 +1,5 @@
 using System.Data;
+using System.Text.Json;
 
 namespace Memento.MCP.Services.Util;
 
@@ -169,5 +170,68 @@ public static class DatabaseUtil
             rows.Add(dict);
         }
         return rows;
+    }
+
+    // ── 数据操作 ──
+
+    /// <summary>将值转为 SQL 字面量（自动处理引号和转义）</summary>
+    public static string ValueToSql(object? value, string dbType)
+    {
+        if (value == null || value == DBNull.Value) return "NULL";
+        if (value is JsonElement je)
+        {
+            return je.ValueKind switch
+            {
+                JsonValueKind.Null => "NULL",
+                JsonValueKind.String => $"'{je.GetString()?.Replace("'", "''")}'",
+                JsonValueKind.True => "1",
+                JsonValueKind.False => "0",
+                JsonValueKind.Number => je.GetRawText(),
+                _ => throw new ArgumentException($"不支持的值类型: {je.ValueKind}"),
+            };
+        }
+        return value switch
+        {
+            string s => $"'{s.Replace("'", "''")}'",
+            int or long or short or byte or float or double or decimal => value.ToString()!,
+            bool b => b ? "1" : "0",
+            DateTime dt => $"'{dt:yyyy-MM-dd HH:mm:ss}'",
+            _ => $"'{value.ToString()?.Replace("'", "''")}'",
+        };
+    }
+
+    /// <summary>生成 INSERT SQL（支持多行批量插入）</summary>
+    public static string InsertSql(string dbType, string tableName, List<Dictionary<string, object?>> rows, string? databaseName = null)
+    {
+        if (rows.Count == 0) throw new ArgumentException("至少需要一行数据");
+        var q = QualifyTable(tableName, databaseName, dbType);
+        var columns = rows[0].Keys.ToList();
+        var colNames = string.Join(", ", columns.Select(c => QuoteName(c, dbType)));
+        var values = rows.Select(row =>
+        {
+            var vals = columns.Select(col => row.TryGetValue(col, out var v) ? ValueToSql(v, dbType) : "NULL");
+            return $"({string.Join(", ", vals)})";
+        });
+        return $"INSERT INTO {q} ({colNames}) VALUES {string.Join(", ", values)}";
+    }
+
+    /// <summary>生成 UPDATE SQL</summary>
+    public static string UpdateSql(string dbType, string tableName, Dictionary<string, object?> data, string where, string? databaseName = null)
+    {
+        if (data.Count == 0) throw new ArgumentException("至少需要一个要更新的字段");
+        var q = QualifyTable(tableName, databaseName, dbType);
+        var setClause = string.Join(", ", data.Select(kv => $"{QuoteName(kv.Key, dbType)} = {ValueToSql(kv.Value, dbType)}"));
+        var sql = $"UPDATE {q} SET {setClause}";
+        if (!string.IsNullOrWhiteSpace(where)) sql += $" WHERE {where}";
+        return sql;
+    }
+
+    /// <summary>生成 DELETE SQL</summary>
+    public static string DeleteSql(string dbType, string tableName, string where, string? databaseName = null)
+    {
+        var q = QualifyTable(tableName, databaseName, dbType);
+        var sql = $"DELETE FROM {q}";
+        if (!string.IsNullOrWhiteSpace(where)) sql += $" WHERE {where}";
+        return sql;
     }
 }

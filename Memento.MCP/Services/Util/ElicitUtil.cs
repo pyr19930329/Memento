@@ -1,4 +1,3 @@
-using System.Text.Json;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
@@ -11,7 +10,7 @@ public static class ElicitUtil
     public static async Task<bool> ConfirmAsync(McpServer server, string message, CancellationToken ct)
     {
         // ── 检查配置：appsettings.json 中 Elicitation 必须为 true ──
-        if (!IsElicitationEnabled()) {
+        if (!ConfigUtil.GetAppConfigBool("Elicitation")) {
             await Console.Error.WriteLineAsync("[ELICIT] Elicitation disabled by appsettings.json");
             return false;
         }
@@ -48,24 +47,6 @@ public static class ElicitUtil
         catch (Exception ex)
         {
             await Console.Error.WriteLineAsync($"[ELICIT] Exception: {ex.GetType().Name}: {ex.Message}");
-            return false;
-        }
-    }
-
-    private static bool IsElicitationEnabled()
-    {
-        try
-        {
-            var path = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
-            if (!File.Exists(path)) return false;
-
-            var json = File.ReadAllText(path);
-            using var doc = JsonDocument.Parse(json);
-            return doc.RootElement.TryGetProperty("Elicitation", out var val)
-                && val.ValueKind == JsonValueKind.True;
-        }
-        catch
-        {
             return false;
         }
     }

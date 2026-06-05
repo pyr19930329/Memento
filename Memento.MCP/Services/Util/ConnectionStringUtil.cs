@@ -8,9 +8,9 @@ public static class ConnectionStringUtil
     {
         return dbType.ToLowerInvariant() switch
         {
-            "mysql" => $"Server={host};Port={port};Database={database};Uid={userId};Pwd={password};Charset=utf8;Allow User Variables=True;Connect Timeout=10;AllowLoadLocalInfile=true;",
+            "mysql" => $"Server={host};Port={port};Database={database};Uid={userId};Pwd={password};Charset=utf8mb4;Allow User Variables=True;Connect Timeout=10;AllowLoadLocalInfile=true;",
             "sqlserver" => $"Data Source={host},{port};Initial Catalog={database};User ID={userId};Password={password};TrustServerCertificate=True;Connect Timeout=10;",
-            "postgresql" or "postgres" => $"Host={host};Port={port};Database={database};User ID={userId};Password={password};Pooling=true;Timeout=10;",
+            "postgresql" or "postgres" => $"Host={host};Port={port};Database={database};User ID={userId};Password={password};Pooling=true;Timeout=10;ClientEncoding=UTF8;",
             _ => throw new ArgumentException($"不支持的数据库类型: {dbType}"),
         };
     }

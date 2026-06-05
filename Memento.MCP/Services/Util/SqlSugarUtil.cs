@@ -22,11 +22,15 @@ public class SqlSugarUtil
         var sw = new System.Diagnostics.Stopwatch();
         client.Aop.OnLogExecuting = (sql, parameters) => {
             sw.Restart();
+            // 保存原始 SQL（执行前），避免 Npgsql/MySqlConnector 等驱动在 OnLogExecuted 中对中文编码造成乱码
+            client.TempItems["__audit_sql__"] = sql;
         };
         client.Aop.OnLogExecuted = (sql, parameters) => {
             sw.Stop();
             var connName = client.TempItems?.TryGetValue("ConnectionName", out var n) == true ? n?.ToString() : "unknown";
-            AuditLogger.Record(connName ?? "unknown", sql, sw.ElapsedMilliseconds);
+            // 优先使用执行前保存的原始 SQL，防止驱动层编码导致中文乱码
+            var originalSql = client.TempItems?.TryGetValue("__audit_sql__", out var s) == true ? s?.ToString() : null;
+            AuditLogger.Record(connName ?? "unknown", originalSql ?? sql, sw.ElapsedMilliseconds);
         };
         client.Aop.OnError = (ex) => {
             Console.Error.WriteLine($"[SQL-ERR] {ex.Message}");
