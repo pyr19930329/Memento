@@ -83,14 +83,16 @@ public class DatabaseToolset
 
         // 备份所有表
         var guid = BackupUtil.NewGuid();
-        var backupPaths = await BackupUtil.BackupDatabaseAsync(db, req.DatabaseName, guid, dbType);
+        var backupPaths = new List<string>();
+        if (ConfigUtil.GetAppConfigBool("Backup.DropDatabase", true))
+            backupPaths = await BackupUtil.BackupDatabaseAsync(db, req.DatabaseName, guid, dbType);
         AuditLogger.Record(req.ConnectionName,
             $"DROP DATABASE {DatabaseUtil.QuoteName(req.DatabaseName, dbType)}",
-            0, guid, string.Join(", ", backupPaths));
+            0, guid, backupPaths.Count > 0 ? string.Join(", ", backupPaths) : "");
 
         var sql = DatabaseUtil.DropDatabaseSql(dbType, req.DatabaseName);
         await db.Ado.ExecuteCommandAsync(sql);
-        return $"数据库 '{req.DatabaseName}' 已删除（已备份 {backupPaths.Count} 张表到 {guid}）";
+        return $"数据库 '{req.DatabaseName}' 已删除{(backupPaths.Count > 0 ? $"（已备份 {backupPaths.Count} 张表到 {guid}）" : "")}";
     }
 
     [McpServerTool, Description("执行 SQL 查询（SELECT），返回 JSON 结果")]

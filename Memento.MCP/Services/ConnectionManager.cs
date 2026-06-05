@@ -28,11 +28,41 @@ public class ConnectionManager
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
-    /// <param name="filePath">持久化文件路径，默认在 exe 目录下 connections.json</param>
+    /// <param name="filePath">持久化文件路径，默认在 %APPDATA%/Memento/connections.json</param>
     public ConnectionManager(string? filePath = null)
     {
-        _filePath = filePath ?? Path.Combine(AppContext.BaseDirectory, "connections.json");
+        _filePath = filePath ?? GetDefaultPath();
+        MigrateFromOldLocation();
         Load();
+    }
+
+    /// <summary>获取持久化路径：%APPDATA%/Memento/connections.json</summary>
+    private static string GetDefaultPath()
+    {
+        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        var dir = Path.Combine(appData, "Memento");
+        Directory.CreateDirectory(dir);
+        return Path.Combine(dir, "connections.json");
+    }
+
+    /// <summary>将旧位置（exe 目录）的 connections.json 迁移到新位置</summary>
+    private void MigrateFromOldLocation()
+    {
+        var oldPath = Path.Combine(AppContext.BaseDirectory, "connections.json");
+        if (!File.Exists(oldPath)) return;
+        if (File.Exists(_filePath)) return; // 新位置已有文件，不覆盖
+
+        try
+        {
+            var dir = Path.GetDirectoryName(_filePath);
+            if (dir != null) Directory.CreateDirectory(dir);
+            File.Move(oldPath, _filePath, overwrite: false);
+            Console.Error.WriteLine($"[ConnectionManager] 已将旧连接文件迁移至: {_filePath}");
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[ConnectionManager] 迁移旧连接文件失败: {ex.Message}");
+        }
     }
 
     // ── 持久化 ──

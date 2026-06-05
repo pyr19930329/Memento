@@ -168,15 +168,14 @@ public static partial class AuditLogger
             "UPDATE"    => @"\bUPDATE\s+",
             "DELETE"    => @"\bFROM\s+",
             "ALTER" or "CREATE" or "DROP" or "TRUNCATE" => @"\bTABLE\s+",
-            "SHOW" or "DESCRIBE" or "DESC" => @"\b(\w+)\s*$",
+            "SHOW" or "DESCRIBE" or "DESC" => @"\b(SHOW|DESCRIBE|DESC)\s+",
             _ => @"\b(\w+)\s*$",
         };
 
-        // 对 SHOW/DESCRIBE 直接取最后一个词
+        // SHOW/DESCRIBE/DESC：关键字后的第一个 name 即为表引用
         if (firstWord is "SHOW" or "DESCRIBE" or "DESC")
         {
-            var m = Regex.Match(sql, keywordPattern, RegexOptions.IgnoreCase);
-            return m.Success ? (null, m.Groups[1].Value) : (null, null);
+            // 直接从关键字后提取
         }
 
         var match = Regex.Match(sql, keywordPattern, RegexOptions.IgnoreCase);

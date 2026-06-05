@@ -49,44 +49,58 @@ public class TableToolset {
 
     [McpServerTool, Description("修改表结构（add / drop / modify 字段）")]
     public async Task<string> AlterTable(McpServer server, CancellationToken cancellationToken, [Description("修改表参数")] AlterTableRequest req) {
-        if (string.IsNullOrWhiteSpace(req.ConnectionName)) return "[ERR] 连接名称不能为空";
-        if (string.IsNullOrWhiteSpace(req.DatabaseName)) return "[ERR] 数据库名不能为空";
-        if (string.IsNullOrWhiteSpace(req.TableName)) return "[ERR] 表名不能为空";
-        var db = SqlSugarUtil.GetClientByName(req.ConnectionName);
-        var dbType = db.CurrentConnectionConfig.DbType.ToString();
+        try
+        {
+            if (string.IsNullOrWhiteSpace(req.ConnectionName)) return "[ERR] 连接名称不能为空";
+            if (string.IsNullOrWhiteSpace(req.DatabaseName)) return "[ERR] 数据库名不能为空";
+            if (string.IsNullOrWhiteSpace(req.TableName)) return "[ERR] 表名不能为空";
+            var db = SqlSugarUtil.GetClientByName(req.ConnectionName);
+            var dbType = db.CurrentConnectionConfig.DbType.ToString();
 
-        var op = req.Operation.ToLowerInvariant();
-        var guid = BackupUtil.NewGuid();
-        string? backupFile = null;
+            var op = req.Operation.ToLowerInvariant();
+            var guid = BackupUtil.NewGuid();
+            string? backupFile = null;
 
-        if (op == "drop") {
-            if (!await ElicitUtil.ConfirmAsync(server, $"⚠️ 将删除表 '{req.DatabaseName}.{req.TableName}' 的字段 '{req.ColumnName}'，数据不可恢复！是否确认？", cancellationToken))
-                return "[ERR] 操作已取消";
-            backupFile = await BackupUtil.BackupColumnAsync(db, req.DatabaseName, req.TableName, req.ColumnName ?? "", guid);
+            if ((op == "drop" || op == "modify") && !string.IsNullOrEmpty(req.ColumnName)) {
+                if (ConfigUtil.GetAppConfigBool("Backup.AlterTable", true))
+                    backupFile = await BackupUtil.BackupColumnAsync(db, req.DatabaseName, req.TableName, req.ColumnName ?? "", guid);
+            }
+
+            var sql = string.Empty;
+            if (op.Equals("add")) {
+                sql = DatabaseUtil.AlterTableAddColumnSql(dbType, req.TableName, new ColumnDef {
+                    Name = req.ColumnName ?? "",
+                    Type = req.ColumnType ?? "varchar(255)",
+                    Nullable = req.Nullable ?? true,
+                    DefaultValue = req.DefaultValue,
+                }, req.DatabaseName);
+            }
+            else if (op.Equals("drop")) {
+                sql = DatabaseUtil.AlterTableDropColumnSql(dbType, req.TableName, req.ColumnName ?? "", req.DatabaseName);
+            }
+            else if (op.Equals("modify"))
+            {
+                sql = DatabaseUtil.AlterTableModifyColumnSql(dbType, req.TableName, new ColumnDef {
+                    Name = req.ColumnName ?? "",
+                    Type = req.ColumnType ?? "varchar(255)",
+                    Nullable = req.Nullable ?? true,
+                    DefaultValue = req.DefaultValue,
+                }, req.DatabaseName);
+            }
+            else return $"[ERR] 不支持的操作: {op}（支持 add / drop / modify）";
+
+            await db.Ado.ExecuteCommandAsync(sql);
+            AuditLogger.Record(req.ConnectionName, sql, 0, guid, backupFile);
+            return $"表 '{req.DatabaseName}.{req.TableName}' 已修改（{op} {req.ColumnName}）";
         }
-        else if (op == "modify") {
-            backupFile = await BackupUtil.BackupColumnAsync(db, req.DatabaseName, req.TableName, req.ColumnName ?? "", guid);
+        catch (OperationCanceledException)
+        {
+            return "[ERR] 操作已被用户取消";
         }
-
-        var sql = op switch {
-            "add" => DatabaseUtil.AlterTableAddColumnSql(dbType, req.TableName, new ColumnDef {
-                Name = req.ColumnName ?? "",
-                Type = req.ColumnType ?? "varchar(255)",
-                Nullable = req.Nullable ?? true,
-                DefaultValue = req.DefaultValue,
-            }, req.DatabaseName),
-            "drop" => DatabaseUtil.AlterTableDropColumnSql(dbType, req.TableName, req.ColumnName ?? "", req.DatabaseName),
-            "modify" => DatabaseUtil.AlterTableModifyColumnSql(dbType, req.TableName, new ColumnDef {
-                Name = req.ColumnName ?? "",
-                Type = req.ColumnType ?? "varchar(255)",
-                Nullable = req.Nullable ?? true,
-                DefaultValue = req.DefaultValue,
-            }, req.DatabaseName),
-            _ => $"[ERR] 不支持的操作: {op}（支持 add / drop / modify）",
-        };
-        await db.Ado.ExecuteCommandAsync(sql);
-        AuditLogger.Record(req.ConnectionName, sql, 0, guid, backupFile);
-        return $"表 '{req.DatabaseName}.{req.TableName}' 已修改（{op} {req.ColumnName}）";
+        catch (Exception ex)
+        {
+            return $"[ERR] {ex.GetType().Name}: {ex.Message}";
+        }
     }
 
     [McpServerTool, Description("删除表")]
@@ -101,7 +115,9 @@ public class TableToolset {
 
         // 备份全表
         var guid = BackupUtil.NewGuid();
-        var backupFile = await BackupUtil.BackupTableAsync(db, req.DatabaseName, req.TableName, guid);
+        string? backupFile = null;
+        if (ConfigUtil.GetAppConfigBool("Backup.DropTable", true))
+            backupFile = await BackupUtil.BackupTableAsync(db, req.DatabaseName, req.TableName, guid);
         AuditLogger.Record(req.ConnectionName,
             $"DROP TABLE {DatabaseUtil.QuoteName(req.TableName, dbType)}",
             0, guid, backupFile);
@@ -123,7 +139,9 @@ public class TableToolset {
 
         // 备份全表
         var guid = BackupUtil.NewGuid();
-        var backupFile = await BackupUtil.BackupTableAsync(db, req.DatabaseName, req.TableName, guid);
+        string? backupFile = null;
+        if (ConfigUtil.GetAppConfigBool("Backup.TruncateTable", true))
+            backupFile = await BackupUtil.BackupTableAsync(db, req.DatabaseName, req.TableName, guid);
         AuditLogger.Record(req.ConnectionName, $"TRUNCATE TABLE {DatabaseUtil.QuoteName(req.TableName, dbType)}", 0, guid, backupFile);
         var sql = DatabaseUtil.TruncateTableSql(dbType, req.TableName, req.DatabaseName);
         await db.Ado.ExecuteCommandAsync(sql);
@@ -154,7 +172,9 @@ public class TableToolset {
 
         // 备份受影响数据
         var guid = BackupUtil.NewGuid();
-        var backupFile = await BackupUtil.BackupTableWithWhereAsync(db, req.DatabaseName ?? "", req.TableName, req.Where, guid);
+        string? backupFile = null;
+        if (ConfigUtil.GetAppConfigBool("Backup.UpdateData", true))
+            backupFile = await BackupUtil.BackupTableWithWhereAsync(db, req.DatabaseName ?? "", req.TableName, req.Where, guid);
 
         var sql = DatabaseUtil.UpdateSql(dbType, req.TableName, req.Data, req.Where, req.DatabaseName);
         var affected = await db.Ado.ExecuteCommandAsync(sql);
@@ -173,7 +193,9 @@ public class TableToolset {
 
         // 备份受影响数据
         var guid = BackupUtil.NewGuid();
-        var backupFile = await BackupUtil.BackupTableWithWhereAsync(db, req.DatabaseName ?? "", req.TableName, req.Where, guid);
+        string? backupFile = null;
+        if (ConfigUtil.GetAppConfigBool("Backup.DeleteData", true))
+            backupFile = await BackupUtil.BackupTableWithWhereAsync(db, req.DatabaseName ?? "", req.TableName, req.Where, guid);
 
         var sql = DatabaseUtil.DeleteSql(dbType, req.TableName, req.Where, req.DatabaseName);
         var affected = await db.Ado.ExecuteCommandAsync(sql);

@@ -103,7 +103,7 @@ public static class DatabaseUtil
 
     /// <summary>获取删除字段的 SQL</summary>
     public static string AlterTableDropColumnSql(string dbType, string tableName, string columnName, string? databaseName = null) =>
-        $"ALTER TABLE {QualifyTable(tableName, databaseName, dbType)} DROP {QuoteName(columnName, dbType)}";
+        $"ALTER TABLE {QualifyTable(tableName, databaseName, dbType)} DROP COLUMN {QuoteName(columnName, dbType)}";
 
     /// <summary>获取修改字段的 SQL</summary>
     public static string AlterTableModifyColumnSql(string dbType, string tableName, ColumnDef column, string? databaseName = null)
