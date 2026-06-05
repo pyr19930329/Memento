@@ -59,14 +59,12 @@ public class TableToolset {
         var guid = BackupUtil.NewGuid();
         string? backupFile = null;
 
-        if (op == "drop")
-        {
+        if (op == "drop") {
             if (!await ElicitUtil.ConfirmAsync(server, $"⚠️ 将删除表 '{req.DatabaseName}.{req.TableName}' 的字段 '{req.ColumnName}'，数据不可恢复！是否确认？", cancellationToken))
                 return "[ERR] 操作已取消";
             backupFile = await BackupUtil.BackupColumnAsync(db, req.DatabaseName, req.TableName, req.ColumnName ?? "", guid);
         }
-        else if (op == "modify")
-        {
+        else if (op == "modify") {
             backupFile = await BackupUtil.BackupColumnAsync(db, req.DatabaseName, req.TableName, req.ColumnName ?? "", guid);
         }
 
@@ -153,9 +151,16 @@ public class TableToolset {
 
         var db = SqlSugarUtil.GetClientByName(req.ConnectionName);
         var dbType = db.CurrentConnectionConfig.DbType.ToString();
+
+        // 备份受影响数据
+        var guid = BackupUtil.NewGuid();
+        var backupFile = await BackupUtil.BackupTableWithWhereAsync(db, req.DatabaseName ?? "", req.TableName, req.Where, guid);
+
         var sql = DatabaseUtil.UpdateSql(dbType, req.TableName, req.Data, req.Where, req.DatabaseName);
         var affected = await db.Ado.ExecuteCommandAsync(sql);
-        return $"已更新 {affected} 行数据";
+
+        AuditLogger.Record(req.ConnectionName, sql, 0, guid, backupFile);
+        return $"已更新 {affected} 行数据（备份 GUID: {guid}）";
     }
 
     [McpServerTool, Description("删除表中数据")]
@@ -165,8 +170,15 @@ public class TableToolset {
 
         var db = SqlSugarUtil.GetClientByName(req.ConnectionName);
         var dbType = db.CurrentConnectionConfig.DbType.ToString();
+
+        // 备份受影响数据
+        var guid = BackupUtil.NewGuid();
+        var backupFile = await BackupUtil.BackupTableWithWhereAsync(db, req.DatabaseName ?? "", req.TableName, req.Where, guid);
+
         var sql = DatabaseUtil.DeleteSql(dbType, req.TableName, req.Where, req.DatabaseName);
         var affected = await db.Ado.ExecuteCommandAsync(sql);
-        return $"已删除 {affected} 行数据";
+
+        AuditLogger.Record(req.ConnectionName, sql, 0, guid, backupFile);
+        return $"已删除 {affected} 行数据（备份 GUID: {guid}）";
     }
 }

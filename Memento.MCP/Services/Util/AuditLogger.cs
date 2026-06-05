@@ -143,11 +143,11 @@ public static partial class AuditLogger
         // 提取表名
         if (entry.Level == Level.Data.ToString() || entry.Level == Level.Table.ToString())
         {
-            entry.Table = ExtractTableName(trimmed, firstWord);
+            (entry.Database, entry.Table) = ExtractTableName(trimmed, firstWord);
         }
         else if (entry.Level == Level.Column.ToString())
         {
-            entry.Table = ExtractTableName(trimmed, "ALTER");
+            (entry.Database, entry.Table) = ExtractTableName(trimmed, "ALTER");
         }
         else if (entry.Level == Level.Database.ToString())
         {
@@ -157,47 +157,53 @@ public static partial class AuditLogger
         return entry;
     }
 
-    private static string? ExtractTableName(string sql, string firstWord)
+    /// <summary>从 SQL 中提取数据库名和表名。返回 (database, table)，database 可能为 null</summary>
+    private static (string? Database, string? Table) ExtractTableName(string sql, string firstWord)
     {
-        // 正则匹配: FROM table, INTO table, UPDATE table, TABLE table, JOIN table
-        string[] patterns;
-
-        switch (firstWord)
+        // 关键字后提取表引用的正则模式
+        string keywordPattern = firstWord switch
         {
-            case "SELECT":
-                patterns = [@"\bFROM\s+[`""'\[\]]?(\w+)[`""'\[\]]?"];
-                break;
-            case "INSERT":
-                patterns = [@"\bINTO\s+[`""'\[\]]?(\w+)[`""'\[\]]?"];
-                break;
-            case "UPDATE":
-                patterns = [@"\bUPDATE\s+[`""'\[\]]?(\w+)[`""'\[\]]?"];
-                break;
-            case "DELETE":
-                patterns = [@"\bFROM\s+[`""'\[\]]?(\w+)[`""'\[\]]?"];
-                break;
-            case "ALTER":
-            case "CREATE":
-            case "DROP":
-            case "TRUNCATE":
-                patterns = [@"\bTABLE\s+[`""'\[\]]?(\w+)[`""'\[\]]?"];
-                break;
-            case "SHOW":
-            case "DESCRIBE":
-            case "DESC":
-                patterns = [@"\b(\w+)\s*$"];
-                break;
-            default:
-                patterns = [@"\b(\w+)\s*$"];
-                break;
+            "SELECT"    => @"\bFROM\s+",
+            "INSERT"    => @"\bINTO\s+",
+            "UPDATE"    => @"\bUPDATE\s+",
+            "DELETE"    => @"\bFROM\s+",
+            "ALTER" or "CREATE" or "DROP" or "TRUNCATE" => @"\bTABLE\s+",
+            "SHOW" or "DESCRIBE" or "DESC" => @"\b(\w+)\s*$",
+            _ => @"\b(\w+)\s*$",
+        };
+
+        // 对 SHOW/DESCRIBE 直接取最后一个词
+        if (firstWord is "SHOW" or "DESCRIBE" or "DESC")
+        {
+            var m = Regex.Match(sql, keywordPattern, RegexOptions.IgnoreCase);
+            return m.Success ? (null, m.Groups[1].Value) : (null, null);
         }
 
-        foreach (var pattern in patterns)
+        var match = Regex.Match(sql, keywordPattern, RegexOptions.IgnoreCase);
+        if (!match.Success) return (null, null);
+
+        var after = sql.Substring(match.Index + match.Length).TrimStart();
+
+        // 匹配 db.table 或 table 形式，自动跳过引号
+        // 引号集: ` (backtick), " (double), ' (single), [ (bracket)
+        var refMatch = Regex.Match(after,
+            @"^[`""'\[\]]?(\w+)[`""'\[\]]?" +                            // 第一段
+            @"(?:\.\s*[`""'\[\]]?(\w+)[`""'\[\]]?)?");                    // 可选 .第二段
+        if (!refMatch.Success) return (null, null);
+
+        var part1 = refMatch.Groups[1].Value;
+        var part2 = refMatch.Groups[2].Value;
+
+        if (string.IsNullOrEmpty(part2))
         {
-            var match = Regex.Match(sql, pattern, RegexOptions.IgnoreCase);
-            if (match.Success) return match.Groups[1].Value;
+            // 只有 tableName
+            return (null, part1);
         }
-        return null;
+        else
+        {
+            // database.table
+            return (part1, part2);
+        }
     }
 
     private static string? ExtractDatabaseName(string sql, string firstWord)

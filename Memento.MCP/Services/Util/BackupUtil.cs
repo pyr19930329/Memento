@@ -49,6 +49,25 @@ public static class BackupUtil
         });
     }
 
+    /// <summary>按条件备份指定表的数据，返回备份文件路径</summary>
+    /// <param name="where">WHERE 条件（不含 WHERE 关键字），为空时备份全表</param>
+    public static async Task<string> BackupTableWithWhereAsync(ISqlSugarClient db, string databaseName, string tableName, string? where, string guid)
+    {
+        var sql = $"SELECT * FROM {Quote(tableName, databaseName)}";
+        if (!string.IsNullOrWhiteSpace(where)) sql += $" WHERE {where}";
+        var rows = await db.Ado.GetDataTableAsync(sql);
+        return await WriteBackupAsync(guid, new BackupRecord
+        {
+            Guid = guid,
+            ConnectionName = db.CurrentConnectionConfig.ConfigId?.ToString() ?? "",
+            TableName = tableName,
+            Operation = "backup_where",
+            BackupTime = DateTimeOffset.Now.ToString("o"),
+            Columns = rows.Columns.Cast<System.Data.DataColumn>().Select(c => c.ColumnName).ToList(),
+            Rows = DataTableToDictList(rows),
+        });
+    }
+
     /// <summary>备份数据库所有表，返回备份文件路径列表</summary>
     public static async Task<List<string>> BackupDatabaseAsync(ISqlSugarClient db, string databaseName, string guid, string dbType)
     {
