@@ -12,4 +12,7 @@ public class DropTableRequest
 
     [McpParam("要删除的表名")]
     public string TableName { get; set; } = "";
+
+    [McpParam("确认执行危险操作，必须为 true")]
+    public bool? Confirm { get; set; }
 }

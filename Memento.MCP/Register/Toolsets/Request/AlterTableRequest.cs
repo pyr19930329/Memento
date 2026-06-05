@@ -28,4 +28,7 @@ public class AlterTableRequest
 
     [McpParam("默认值（add/modify 时用）")]
     public string? DefaultValue { get; set; }
+
+    [McpParam("确认执行危险操作（drop 时必须为 true）")]
+    public bool? Confirm { get; set; }
 }
