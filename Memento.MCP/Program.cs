@@ -5,9 +5,7 @@ using Memento.MCP.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 // ── 2. 端口配置：命令行参数 > appsettings.json > 默认 9876 ──
-var port = args.Length > 0
-    ? args[0]
-    : (builder.Configuration["Port"] ?? "9876");
+var port = args.Length > 0 ? args[0] : (builder.Configuration["Port"] ?? "9876");
 builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
 // ── 3. 全局异常 ──

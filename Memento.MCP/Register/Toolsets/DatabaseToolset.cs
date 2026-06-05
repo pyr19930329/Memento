@@ -80,10 +80,7 @@ public class DatabaseToolset
     {
         if (string.IsNullOrWhiteSpace(req.ConnectionName)) return "[ERR] 连接名称不能为空";
         if (string.IsNullOrWhiteSpace(req.DatabaseName)) return "[ERR] 数据库名称不能为空";
-
-        if (!await ElicitUtil.ConfirmAsync(server, $"⚠️ 将永久删除数据库 '{req.DatabaseName}'，数据不可恢复！是否确认？", cancellationToken))
-            return "[ERR] 操作已取消";
-
+        if (!await ElicitUtil.ConfirmAsync(server, $"⚠️ 将永久删除数据库 '{req.DatabaseName}'，数据不可恢复！是否确认？", cancellationToken)) return "[ERR] 操作已取消";
         var db = SqlSugarUtil.GetClientByName(req.ConnectionName);
         var dbType = db.CurrentConnectionConfig.DbType.ToString();
         var sql = DatabaseUtil.DropDatabaseSql(dbType, req.DatabaseName);
